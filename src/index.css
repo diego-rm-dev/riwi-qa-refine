@@ -1,96 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* RIWI QA Design System - Minimalista y Moderno */
 
 @layer base {
   :root {
+    /* Colores RIWI */
+    --riwi-primary: 262 83% 69%;     /* #8B5CF6 - Púrpura Primario */
+    --riwi-secondary: 258 76% 75%;   /* #A78BFA - Púrpura Secundario */
+    --riwi-success: 158 64% 52%;     /* #10B981 - Success */
+    --riwi-error: 0 84% 60%;         /* #EF4444 - Error */
+    --riwi-warning: 38 92% 50%;      /* #F59E0B - Warning */
+    
+    /* Base colors using RIWI palette */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --foreground: 262 83% 5%;
+    
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 262 83% 5%;
+    
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --popover-foreground: 262 83% 5%;
+    
+    --primary: var(--riwi-primary);
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 262 30% 96%;
+    --secondary-foreground: 262 83% 15%;
+    
+    --muted: 262 30% 96%;
+    --muted-foreground: 262 20% 45%;
+    
+    --accent: var(--riwi-secondary);
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: var(--riwi-error);
+    --destructive-foreground: 0 0% 100%;
+    
+    --success: var(--riwi-success);
+    --success-foreground: 0 0% 100%;
+    
+    --warning: var(--riwi-warning);
+    --warning-foreground: 0 0% 100%;
+    
+    --border: 262 30% 90%;
+    --input: 262 30% 90%;
+    --ring: var(--riwi-primary);
+    
+    --radius: 0.75rem;
+    
+    /* Gradientes RIWI */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--riwi-primary)), hsl(var(--riwi-secondary)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--riwi-primary)) 0%, hsl(var(--riwi-secondary)) 100%);
+    
+    /* Sombras elegantes */
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--riwi-primary) / 0.2);
+    --shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.05);
+    
+    /* Transiciones suaves */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-
+  
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 262 83% 4%;
+    --foreground: 0 0% 98%;
+    
+    --card: 262 50% 8%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 262 50% 8%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: var(--riwi-secondary);
+    --primary-foreground: 262 83% 4%;
+    
+    --secondary: 262 30% 15%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 262 30% 15%;
+    --muted-foreground: 262 20% 65%;
+    
+    --accent: var(--riwi-primary);
+    --accent-foreground: 0 0% 98%;
+    
+    --border: 262 30% 20%;
+    --input: 262 30% 20%;
+    
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--riwi-primary) / 0.4);
   }
 }
 
