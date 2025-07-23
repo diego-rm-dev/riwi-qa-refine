@@ -1,6 +1,7 @@
-import { NavLink } from 'react-router-dom';
-import { RefreshCw, FileText, History, TestTube } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { RefreshCw, FileText, History, TestTube, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { path: '/', label: 'Refinar HUs', icon: RefreshCw },
@@ -10,6 +11,8 @@ const navItems = [
 ];
 
 export default function Navbar() {
+
+
   return (
     <nav className="bg-white border-b border-border sticky top-0 z-50 shadow-card">
       <div className="max-w-7xl mx-auto px-6">
@@ -20,12 +23,14 @@ export default function Navbar() {
               <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">R</span>
               </div>
-              <span className="text-xl font-bold text-foreground">RIWI QA</span>
+              <div>
+                <div className="text-xl font-bold text-foreground">RIWI QA</div>
+              </div>
             </NavLink>
           </div>
 
           {/* Navigation */}
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center space-x-4">
             <div className="ml-10 flex items-baseline space-x-1">
               {navItems.map(({ path, label, icon: Icon }) => (
                 <NavLink

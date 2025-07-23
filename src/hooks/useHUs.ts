@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAppContext } from '@/context/AppContext';
-import { refineHU, getPendingHUs, approveHU, rejectHU, reRefineHU } from '@/services/api';
+// ✅ CORREGIDO: Importación sin reRefineHU
+import { refineHU, getPendingHUs, approveHU, rejectHU, getHUById } from '@/services/api'; // Ajusta la ruta según tu estructura
 import { toast } from '@/hooks/use-toast';
 
 export function useHUs() {
@@ -19,20 +20,33 @@ export function useHUs() {
         description: message,
         variant: 'destructive'
       });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [dispatch]);
 
-  const refineHUById = useCallback(async (huId: string) => {
+  const refineHUById = useCallback(async (huInput: string) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      const response = await refineHU(huId);
+      // ✅ CORREGIDO: Limpiar el input del usuario
+      // Extraer solo el número del input (ej: "HU-109" → "109" o "109" → "109")
+      const azureId = huInput.replace(/^HU-?/i, '').trim();
+      
+      // Validar que sea un número válido
+      if (!/^\d+$/.test(azureId)) {
+        throw new Error('El ID debe ser un número válido. Ejemplo: HU-109 o 109');
+      }
+      
+      const response = await refineHU(azureId);
       if (response.success && response.data) {
         dispatch({ type: 'ADD_PENDING_HU', payload: response.data });
         toast({
           title: 'HU Refinada Exitosamente',
-          description: `La historia ${huId} ha sido refinada y está lista para revisión.`
+          description: `La historia HU-${azureId} ha sido refinada y está lista para revisión.`
         });
         return response.data;
+      } else {
+        throw new Error(response.message || 'Error refinando HU');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error refinando HU';
@@ -55,8 +69,11 @@ export function useHUs() {
       dispatch({ type: 'APPROVE_HU', payload: { id, qaReviewer } });
       toast({
         title: 'HU Aprobada',
-        description: 'La historia de usuario ha sido aprobada exitosamente.'
+        description: 'La historia de usuario ha sido aprobada exitosamente y actualizada en Azure DevOps.'
       });
+      
+      // Recargar la lista para actualizar el estado
+      await loadPendingHUs();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error aprobando HU';
       dispatch({ type: 'SET_ERROR', payload: message });
@@ -69,35 +86,37 @@ export function useHUs() {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [dispatch]);
+  }, [dispatch, loadPendingHUs]);
 
+  // ✅ CORREGIDO: Re-refinamiento automático eliminado
   const rejectHUById = useCallback(async (id: string, feedback: string, qaReviewer: string = 'QA Reviewer') => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      // First reject the HU
+      // Rechazar HU (esto dispara re-refinamiento automático en el backend)
       await rejectHU(id, feedback, qaReviewer);
       dispatch({ type: 'REJECT_HU', payload: { id, feedback, qaReviewer } });
 
-      // Then automatically re-refine it
-      const currentHU = state.pendingHUs.find(hu => hu.id === id);
-      if (currentHU) {
-        toast({
-          title: 'HU Rechazada',
-          description: 'Iniciando re-refinamiento automático con IA...'
-        });
+      toast({
+        title: 'HU Rechazada',
+        description: 'La HU ha sido rechazada y se está re-refinando automáticamente con IA. Esto puede tomar unos momentos...'
+      });
 
+      // ✅ NUEVO: Esperar y actualizar la HU re-refinada
+      // Dar tiempo al backend para procesar el re-refinamiento
+      setTimeout(async () => {
         try {
-          const reRefinedHU = await reRefineHU(id, feedback, currentHU.refinedContent);
+          // Obtener la HU actualizada con el nuevo contenido refinado
+          const updatedHU = await getHUById(id);
           
-          // Update the HU with re-refined content and set back to pending
+          // Actualizar la HU en el estado
           const updatedHUs = state.pendingHUs.map(hu =>
-            hu.id === id ? reRefinedHU : hu
+            hu.id === id ? updatedHU : hu
           );
           dispatch({ type: 'SET_PENDING_HUS', payload: updatedHUs });
           
-          // Update current HU if it's the one being viewed
+          // Actualizar current HU si es la que se está viendo
           if (state.currentHU?.id === id) {
-            dispatch({ type: 'SET_CURRENT_HU', payload: reRefinedHU });
+            dispatch({ type: 'SET_CURRENT_HU', payload: updatedHU });
           }
 
           toast({
@@ -105,14 +124,15 @@ export function useHUs() {
             description: 'La HU ha sido re-refinada automáticamente y está lista para nueva revisión.'
           });
         } catch (reRefineError) {
-          console.error('Error in re-refinement:', reRefineError);
+          console.error('Error obteniendo HU re-refinada:', reRefineError);
           toast({
-            title: 'Error en Re-refinamiento',
-            description: 'La HU fue rechazada pero falló el re-refinamiento automático.',
-            variant: 'destructive'
+            title: 'Re-refinamiento en Proceso',
+            description: 'La HU fue rechazada y se está re-refinando. Actualiza la página en unos momentos.',
+            variant: 'default'
           });
         }
-      }
+      }, 3000); // Esperar 3 segundos para el procesamiento de IA
+
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error rechazando HU';
       dispatch({ type: 'SET_ERROR', payload: message });
@@ -131,12 +151,36 @@ export function useHUs() {
     dispatch({ type: 'SET_CURRENT_HU', payload: hu });
   }, [dispatch]);
 
+  // ✅ NUEVA: Función para refrescar una HU específica
+  const refreshHU = useCallback(async (id: string) => {
+    try {
+      const updatedHU = await getHUById(id);
+      
+      // Actualizar en la lista
+      const updatedHUs = state.pendingHUs.map(hu =>
+        hu.id === id ? updatedHU : hu
+      );
+      dispatch({ type: 'SET_PENDING_HUS', payload: updatedHUs });
+      
+      // Actualizar current HU si es la que se está viendo
+      if (state.currentHU?.id === id) {
+        dispatch({ type: 'SET_CURRENT_HU', payload: updatedHU });
+      }
+      
+      return updatedHU;
+    } catch (error) {
+      console.error('Error refreshing HU:', error);
+      throw error;
+    }
+  }, [dispatch, state.pendingHUs, state.currentHU]);
+
   return {
     ...state,
     loadPendingHUs,
     refineHUById,
     approveHUById,
     rejectHUById,
-    setCurrentHU
+    setCurrentHU,
+    refreshHU // Nueva función para refrescar HUs
   };
 }

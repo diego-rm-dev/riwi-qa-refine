@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import ReactMarkdown from 'react-markdown';
 import { useHUs } from '@/hooks/useHUs';
 import { useFilters } from '@/hooks/useFilters';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -15,6 +14,7 @@ import RejectModal from '@/components/ui/RejectModal';
 import Navbar from '@/components/layout/Navbar';
 import { mockModules, mockFeatures } from '@/data/mockData';
 import { PendingHU } from '@/types';
+import ReactMarkdown from 'react-markdown';
 
 const Pending = () => {
   const { currentHU, loading, loadPendingHUs, setCurrentHU, approveHUById, rejectHUById } = useHUs();
@@ -267,8 +267,64 @@ const Pending = () => {
 
               {/* Content */}
               <Card className="mb-8">
-                <CardContent className="p-8">
-                  <div className="prose prose-sm max-w-none">
+    <CardContent className="p-8">
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h3 className="text-xl font-semibold text-foreground mb-2">
+            Análisis de Historia de Usuario
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Refinamiento automático con evaluación de criticidad y criterios de aceptación
+          </p>
+        </div>
+        
+        {/* Content Display */}
+        {currentHU.refinedContent ? (
+          <>
+            {/* ✅ Loading state */}
+            {(currentHU.refinedContent.includes('🤖 Refinando') || 
+              currentHU.refinedContent.includes('🤖 Procesando')) ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-primary font-medium">Refinando con IA...</p>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    Analizando criticidad y generando criterios de aceptación
+                  </p>
+                </div>
+              </div>
+            ) : 
+            
+            /* ✅ Error state */
+            currentHU.refinedContent.includes('❌ Error') ? (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center">
+                    <span className="text-white text-xs">!</span>
+                  </div>
+                  <h4 className="font-medium text-destructive">Error en el refinamiento</h4>
+                </div>
+                <pre className="text-sm text-destructive/80 whitespace-pre-wrap">
+                  {currentHU.refinedContent}
+                </pre>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-4"
+                  onClick={() => {
+                    // Función para reintentar el refinamiento
+                    console.log('Reintentar refinamiento');
+                  }}
+                >
+                  Reintentar Refinamiento
+                </Button>
+              </div>
+            ) : 
+            
+            /* ✅ Success state - Content display */
+            (
+              <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-6">
                     <ReactMarkdown
                       components={{
                         h1: ({ children }) => <h1 className="text-2xl font-bold mb-4 text-foreground">{children}</h1>,
@@ -285,10 +341,19 @@ const Pending = () => {
                       }}
                     >
                       {currentHU.refinedContent}
-                    </ReactMarkdown>
-                  </div>
-                </CardContent>
-              </Card>
+                  </ReactMarkdown>
+              </div>
+            )}
+          </>
+        ) : (
+          /* ✅ No content state */
+          <div className="text-center py-12 text-muted-foreground">
+            <p>No hay contenido refinado disponible</p>
+          </div>
+        )}
+      </div>
+    </CardContent>
+</Card>
 
               {/* Action Buttons - Only show for pending HUs */}
               {currentHU.status === 'pending' && (
