@@ -1,73 +1,114 @@
-# Welcome to your Lovable project
+# RIWI-QA-Refine – User Guide
 
-## Project info
+Welcome to **RIWI-QA-Refine**, a front-end web application that streamlines the Quality-Assurance flow for User Stories (HUs) and auto-generates XRAY test cases.
 
-**URL**: https://lovable.dev/projects/0126b657-e64e-4957-b1c8-e2c23aecf9f6
+---
 
-## How can I edit this code?
+## Table of Contents
+1. [Live Demo](#live-demo)
+2. [Features](#features)
+3. [Quick Start](#quick-start)
+4. [Environment Variables](#environment-variables)
+5. [Available Scripts](#available-scripts)
+6. [Project Structure](#project-structure)
+7. [FAQ](#faq)
+8. [License](#license)
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## Live Demo
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0126b657-e64e-4957-b1c8-e2c23aecf9f6) and start prompting.
+The latest build is hosted at:
 
-Changes made via Lovable will be committed automatically to this repo.
+> 🌐 **https://riwi-qa-refine.diegormdev.site**
 
-**Use your preferred IDE**
+(_If the link is unavailable, run the project locally as described below._)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Features
 
-Follow these steps:
+✔️ AI-powered refinement of Azure DevOps HUs  
+✔️ Review queue with **accept / reject / re-refine** actions  
+✔️ Historical log of approved & rejected HUs  
+✔️ One-click generation of **XRAY** test cases  
+✔️ Color-coded feature & module tags for instant visual context  
+✔️ Responsive UI built with **Tailwind CSS** & **shadcn-ui**  
+✔️ Fast dev experience powered by **Vite** (HMR < 50 ms)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Quick Start
 
-# Step 3: Install the necessary dependencies.
-npm i
+```bash
+# 1. Clone repository
+$ git clone https://github.com/riwi/qa-refine-frontend.git && cd qa-refine-frontend
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# 2. Install dependencies
+$ npm install
+
+# 3. Configure environment
+$ cp .env.save .env # then edit values (see below)
+
+# 4. Launch dev server (http://localhost:8080)
+$ npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will auto-reload when you edit files, and API calls to `/api/*` are transparently proxied to `http://localhost:3000`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Environment Variables
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Create a `.env` file in the project root.
 
-## What technologies are used for this project?
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `VITE_API_BASE_URL` | `https://api-qa-blackbird.diegormdev.site` | Backend REST endpoint. |
+| `VITE_API_KEY` | `eyJhbGci...` | **JWT** bearer token used for every request. |
 
-This project is built with:
+> Run `npm run dev` after editing `.env` so Vite can reload the variables.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## Available Scripts
 
-Simply open [Lovable](https://lovable.dev/projects/0126b657-e64e-4957-b1c8-e2c23aecf9f6) and click on Share -> Publish.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server with HMR. |
+| `npm run build` | Build production bundle into `dist/`. |
+| `npm run preview` | Serve the production bundle locally. |
+| `npm run lint` | Run ESLint over the entire codebase. |
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## Project Structure
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```
+src/
+├─ components/      # Reusable UI (shadcn + custom)
+├─ pages/           # Route-level screens (Pending, History, Tests …)
+├─ services/        # API client & helpers (axios, react-query)
+├─ hooks/           # Custom React hooks
+└─ types/           # TypeScript interfaces & enums
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
+
+## FAQ
+
+**The API returns 401 / 403 errors**  
+Ensure that `VITE_API_KEY` in your `.env` is valid and has not expired.
+
+**Styles look broken after updating Tailwind classes**  
+Run `npm run dev` again to let Vite re-scan your source files.
+
+**How do I request a new feature?**  
+Open an issue or ping the maintainer listed below.
+
+---
+
+## License
+
+MIT © 2025 **Blackbird**  
+Maintainer: [Diego Ramirez](mailto:diego.ramirez@blackkbirdlabs.com.co)
