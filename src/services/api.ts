@@ -11,7 +11,7 @@ console.log('   API Key:', API_KEY ? '✅ Configured' : '❌ Missing');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // ✅ Aumentado por el procesamiento de IA
+  timeout: 300000, // ✅ Aumentado por el procesamiento de IA
   headers: {
     'Content-Type': 'application/json',
   },
