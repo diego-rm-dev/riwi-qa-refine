@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Navbar from '@/components/layout/Navbar';
+import { generateTests } from '@/services/api';
 
 const Tests = () => {
   const [formData, setFormData] = useState({
@@ -59,40 +60,16 @@ const Tests = () => {
         ? formData.azureId 
         : `HU-${formData.azureId}`;
 
-	// ✅ OBTENER API KEY DE VARIABLES DE ENTORNO
-	const apiKey = import.meta.env.VITE_API_KEY;
-	const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api-qa-blackbird.diegormdev.site/';
+      const data = await generateTests(normalizedAzureId, formData.xrayPath.trim());
 
-	if (!apiKey) {
-  		throw new Error('API Key no configurada. Contacta al administrador del sistema.');
-	}
-
-      const response = await fetch('https://api-qa-blackbird.diegormdev.site/generate-tests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-	  'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          xray_path: formData.xrayPath.trim(),
-          azure_id: normalizedAzureId
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Error generando tests');
-      }
-
-      setResult({
-        success: true,
-        message: data.message,
-        hu_name: data.hu_name,
-        tests_count: data.tests_generated,
-        xray_path: data.xray_path,
-        tests: data.tests
-      });
+              setResult({
+          success: true,
+          message: data.message,
+          hu_name: data.hu_name,
+          tests_count: data.tests_generated,
+          xray_path: data.xray_path,
+          tests: data.tests
+        });
 
       // Limpiar formulario en caso de éxito
       setFormData({ xrayPath: '', azureId: '' });
@@ -152,7 +129,7 @@ const Tests = () => {
                     id="xrayPath"
                     name="xrayPath"
                     type="text"
-                    placeholder="Ejemplo: Informacion/Funcionales/Basados en Requisitos/Feature-100/HU-129"
+                    placeholder="Ejemplo: Feature-97/HU-104"
                     value={formData.xrayPath}
                     onChange={handleInputChange}
                     disabled={loading}
@@ -164,7 +141,7 @@ const Tests = () => {
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Estructura: Módulo/Tipo/Categoría/Feature-XXX/HU-XXX
+                    Ruta completa en XRay (ej: Feature-97/HU-104)
                   </p>
                 </div>
 

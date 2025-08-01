@@ -2,7 +2,7 @@ import axios from 'axios';
 import { PendingHU, RefineHURequest, RefineHUResponse } from '@/types';
 
 // ✅ CORRECTO: Variables de entorno sin dotenv
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-qa-blackbird.diegormdev.site';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8123';
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 console.log('🔧 API Configuration:');
@@ -17,14 +17,47 @@ export const apiClient = axios.create({
   },
 });
 
+// Función para obtener token JWT
+let jwtToken: string | null = null;
+
+const getAuthToken = async (): Promise<string> => {
+  if (jwtToken) {
+    return jwtToken;
+  }
+  
+  try {
+    console.log('🔐 Obteniendo token JWT...');
+    const response = await axios.post(`${API_BASE_URL}/auth/token`, 
+      new URLSearchParams({
+        'username': 'test',
+        'password': 'test123'
+      }), 
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    jwtToken = response.data.access_token;
+    console.log('✅ Token JWT obtenido exitosamente');
+    return jwtToken;
+  } catch (error) {
+    console.error('❌ Error obteniendo token JWT:', error);
+    throw new Error('No se pudo autenticar con el servidor');
+  }
+};
+
 // Add interceptor to include Bearer token in every request
 apiClient.interceptors.request.use(
-  (config) => {
-    if (API_KEY) {
-      config.headers['Authorization'] = `Bearer ${API_KEY}`;
+  async (config) => {
+    try {
+      const token = await getAuthToken();
+      config.headers['Authorization'] = `Bearer ${token}`;
       console.log('🔐 Authorization header added to request');
-    } else {
-      console.warn('⚠️ API_KEY not found in .env file');
+    } catch (error) {
+      console.error('❌ Error obteniendo token:', error);
+      throw error;
     }
     return config;
   },
@@ -41,8 +74,16 @@ apiClient.interceptors.response.use(
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
-      data: error.response?.data
+      data: error.response?.data,
+      message: error.message
     });
+    
+    // Manejar errores de CORS específicamente
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.error('🌐 CORS/Network Error detected');
+      return Promise.reject(new Error('Error de conexión: Verifica que el servidor esté disponible y la configuración de CORS sea correcta'));
+    }
+    
     return Promise.reject(error);
   }
 );
