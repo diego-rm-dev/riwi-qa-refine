@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, Sparkles, ArrowRight, FileText } from 'lucide-react';
+import { RefreshCw, Sparkles, ArrowRight, FileText, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { useHUs } from '@/hooks/useHUs';
-import Navbar from '@/components/layout/Navbar';
 
 const Index = () => {
   const [huId, setHuId] = useState('');
   const [isValidFormat, setIsValidFormat] = useState(true);
+  const [language, setLanguage] = useState<'es' | 'en'>('es'); // 'es' = español, 'en' = inglés
   const { loading, refineHUById } = useHUs();
   const navigate = useNavigate();
 
@@ -30,13 +31,17 @@ const Index = () => {
     }
   };
 
+  const handleLanguageChange = (checked: boolean) => {
+    setLanguage(checked ? 'en' : 'es');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!huId.trim() || !isValidFormat) return;
 
     try {
-      await refineHUById(huId);
+      await refineHUById(huId, language);
       // Navigate to pending page after successful refinement
       navigate('/pending');
     } catch (error) {
@@ -49,8 +54,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-accent/10">
-      <Navbar />
-      
       <div className="container mx-auto px-6 py-12">
         <div className="max-w-2xl mx-auto">
           {/* Hero Section */}
@@ -79,6 +82,28 @@ const Index = () => {
             
             <CardContent className="space-y-6">
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Language Selection */}
+                <div className="flex items-center justify-center space-x-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Globe className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">Idioma de Refinamiento</span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <span className={`text-sm font-medium transition-colors ${language === 'es' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      Español
+                    </span>
+                    <Switch
+                      checked={language === 'en'}
+                      onCheckedChange={handleLanguageChange}
+                      className="data-[state=checked]:bg-primary"
+                    />
+                    <span className={`text-sm font-medium transition-colors ${language === 'en' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      English
+                    </span>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="hu-id" className="text-sm font-medium">
                     ID de Historia de Usuario
@@ -98,88 +123,55 @@ const Index = () => {
                   />
                   
                   {!isValidFormat && huId.length > 0 && (
-                    <p className="text-sm text-destructive mt-1">
-                      Formato inválido. Use: HU-XXX (donde XXX son 1-4 dígitos)
+                    <p className="text-sm text-destructive">
+                      Formato inválido. Usa el formato HU-XXX (ej: HU-120)
                     </p>
                   )}
-                  
-                  <p className="text-xs text-muted-foreground">
-                    Ingrese el ID en formato HU-XXX (ej: HU-1, HU-120, HU-1234)
-                  </p>
                 </div>
 
                 <Button
                   type="submit"
-                  variant="gradient"
-                  size="xl"
                   className="w-full"
                   disabled={!isFormValid || loading}
                 >
                   {loading ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      Refinando con IA...
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Refinando...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-5 h-5" />
-                      Refinar HU
-                      <ArrowRight className="w-5 h-5" />
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Refinar con IA
                     </>
                   )}
                 </Button>
               </form>
 
               {/* Quick Actions */}
-              <div className="pt-6 border-t border-border">
-                <p className="text-sm text-muted-foreground text-center mb-4">
-                  ¿Ya tienes HUs refinadas?
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/pending')}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Ver Pendientes
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
                 
                 <Button
                   variant="outline"
-                  className="w-full"
-                  onClick={() => navigate('/pending')}
+                  onClick={() => navigate('/history')}
+                  className="flex items-center justify-center gap-2"
                 >
                   <FileText className="w-4 h-4" />
-                  Ver HUs Pendientes
+                  Ver Historial
+                  <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
             </CardContent>
           </Card>
-
-          {/* Features */}
-          <div className="grid md:grid-cols-3 gap-6 mt-12">
-            <div className="text-center p-6">
-              <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <RefreshCw className="w-6 h-6 text-success" />
-              </div>
-              <h3 className="font-semibold mb-2">Refinamiento Automático</h3>
-              <p className="text-sm text-muted-foreground">
-                IA convierte HUs básicas en especificaciones detalladas y completas
-              </p>
-            </div>
-            
-            <div className="text-center p-6">
-              <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-6 h-6 text-warning" />
-              </div>
-              <h3 className="font-semibold mb-2">Revisión QA</h3>
-              <p className="text-sm text-muted-foreground">
-                Sistema de aprobación/rechazo con feedback para mejora continua
-              </p>
-            </div>
-            
-            <div className="text-center p-6">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-2">Re-refinamiento</h3>
-              <p className="text-sm text-muted-foreground">
-                Mejora automática basada en feedback del equipo QA
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

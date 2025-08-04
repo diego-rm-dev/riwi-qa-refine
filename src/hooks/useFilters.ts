@@ -3,22 +3,22 @@ import { useAppContext } from '@/context/AppContext';
 import { PendingHU, FilterOptions } from '@/types';
 
 export function useFilters() {
-  const { state, dispatch } = useAppContext();
+  const { appState, appDispatch } = useAppContext();
 
   const updateFilter = (updates: Partial<FilterOptions>) => {
-    dispatch({ type: 'UPDATE_FILTERS', payload: updates });
+    appDispatch({ type: 'UPDATE_FILTERS', payload: updates });
   };
 
   const clearFilters = () => {
-    dispatch({
+    appDispatch({
       type: 'UPDATE_FILTERS',
       payload: { search: '', module: '', feature: '', status: '' }
     });
   };
 
   const filteredHUs = useMemo(() => {
-    return state.pendingHUs.filter((hu: PendingHU) => {
-      const { search, module, feature, status } = state.filters;
+    return appState.pendingHUs.filter((hu: PendingHU) => {
+      const { search, module, feature, status } = appState.filters;
 
       // Search filter (title, originalId, content)
       if (search && !hu.title.toLowerCase().includes(search.toLowerCase()) &&
@@ -44,26 +44,26 @@ export function useFilters() {
 
       return true;
     });
-  }, [state.pendingHUs, state.filters]);
+  }, [appState.pendingHUs, appState.filters]);
 
   const hasActiveFilters = useMemo(() => {
-    const { search, module, feature, status } = state.filters;
+    const { search, module, feature, status } = appState.filters;
     return !!(search || (module && module !== 'all') || (feature && feature !== 'all') || (status && status !== 'all'));
-  }, [state.filters]);
+  }, [appState.filters]);
 
   const filterCounts = useMemo(() => {
     const counts = {
-      total: state.pendingHUs.length,
-      pending: state.pendingHUs.filter(hu => hu.status === 'pending').length,
-      accepted: state.pendingHUs.filter(hu => hu.status === 'accepted').length,
-      rejected: state.pendingHUs.filter(hu => hu.status === 'rejected').length,
+      total: appState.pendingHUs.length,
+      pending: appState.pendingHUs.filter(hu => hu.status === 'pending').length,
+      accepted: appState.pendingHUs.filter(hu => hu.status === 'accepted').length,
+      rejected: appState.pendingHUs.filter(hu => hu.status === 'rejected').length,
       filtered: filteredHUs.length
     };
     return counts;
-  }, [state.pendingHUs, filteredHUs]);
+  }, [appState.pendingHUs, filteredHUs]);
 
   return {
-    filters: state.filters,
+    filters: appState.filters,
     filteredHUs,
     updateFilter,
     clearFilters,
