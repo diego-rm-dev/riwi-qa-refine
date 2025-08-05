@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import Navbar from '@/components/layout/Navbar';
+import { generateTests } from '@/services/api';
 
 const Tests = () => {
   const [formData, setFormData] = useState({
@@ -59,40 +59,16 @@ const Tests = () => {
         ? formData.azureId 
         : `HU-${formData.azureId}`;
 
-	// ✅ OBTENER API KEY DE VARIABLES DE ENTORNO
-	const apiKey = import.meta.env.VITE_API_KEY;
-	const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api-qa-blackbird.diegormdev.site/';
+      const data = await generateTests(normalizedAzureId, formData.xrayPath.trim());
 
-	if (!apiKey) {
-  		throw new Error('API Key no configurada. Contacta al administrador del sistema.');
-	}
-
-      const response = await fetch('https://api-qa-blackbird.diegormdev.site/generate-tests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-	  'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          xray_path: formData.xrayPath.trim(),
-          azure_id: normalizedAzureId
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Error generando tests');
-      }
-
-      setResult({
-        success: true,
-        message: data.message,
-        hu_name: data.hu_name,
-        tests_count: data.tests_generated,
-        xray_path: data.xray_path,
-        tests: data.tests
-      });
+              setResult({
+          success: true,
+          message: data.message,
+          hu_name: data.hu_name,
+          tests_count: data.tests_generated,
+          xray_path: data.xray_path,
+          tests: data.tests
+        });
 
       // Limpiar formulario en caso de éxito
       setFormData({ xrayPath: '', azureId: '' });
@@ -113,8 +89,6 @@ const Tests = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-      
       <div className="container mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -152,7 +126,7 @@ const Tests = () => {
                     id="xrayPath"
                     name="xrayPath"
                     type="text"
-                    placeholder="Ejemplo: Informacion/Funcionales/Basados en Requisitos/Feature-100/HU-129"
+                    placeholder="Ejemplo: Feature-97/HU-104"
                     value={formData.xrayPath}
                     onChange={handleInputChange}
                     disabled={loading}
@@ -164,7 +138,7 @@ const Tests = () => {
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Estructura: Módulo/Tipo/Categoría/Feature-XXX/HU-XXX
+                    Ruta completa en XRay (ej: Feature-97/HU-104)
                   </p>
                 </div>
 
@@ -267,22 +241,27 @@ const Tests = () => {
                     </AlertDescription>
                   </Alert>
 
-                  {/* Detalles */}
+                  {/* Detalles principales */}
                   <div className="grid gap-4">
                     <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">Historia de Usuario:</span>
-                      <span className="text-sm text-muted-foreground">{result.hu_name}</span>
+                      <span className="text-sm text-muted-foreground font-semibold">{result.hu_name || 'N/A'}</span>
                     </div>
                     
                     <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">Tests Generados:</span>
-                      <span className="text-sm font-semibold text-primary">{result.tests_count}</span>
+                      <span className="text-sm font-semibold text-primary">{result.tests_generated || 0}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <span className="text-sm font-medium">Tests Enviados:</span>
+                      <span className="text-sm font-semibold text-green-600">{result.tests_sent || 0}</span>
                     </div>
                     
                     <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">Ruta XRay:</span>
                       <span className="text-xs font-mono text-muted-foreground break-all">
-                        {result.xray_path}
+                        {result.xray_path || 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -290,26 +269,66 @@ const Tests = () => {
                   {/* Lista de Tests Generados */}
                   {result.tests && result.tests.length > 0 && (
                     <div className="space-y-3">
-                      <h4 className="font-semibold text-sm">Casos de Test Generados:</h4>
+                      <h4 className="font-semibold text-sm flex items-center gap-2">
+                        <TestTube className="w-4 h-4" />
+                        Casos de Test Generados ({result.tests.length})
+                      </h4>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
                         {result.tests.map((test, index) => (
                           <div key={index} className="p-3 border border-border rounded-lg bg-card">
                             <div className="flex items-start justify-between gap-2 mb-2">
-                              <h5 className="font-medium text-sm">{test.fields?.summary || `Test Case ${index + 1}`}</h5>
-                              <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                                {test.testtype || 'Manual'}
-                              </span>
+                              <h5 className="font-medium text-sm flex-1">{test.summary}</h5>
+                              <div className="flex gap-1">
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  test.category === 'criticos' ? 'bg-red-100 text-red-700' :
+                                  test.category === 'importantes' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-green-100 text-green-700'
+                                }`}>
+                                  {test.category}
+                                </span>
+                                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                                  {test.testtype}
+                                </span>
+                              </div>
                             </div>
                             
-                            <p className="text-xs text-muted-foreground mb-2">
-                              {test.fields?.description || 'Sin descripción'}
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                              {test.description}
                             </p>
                             
-                            <div className="text-xs text-muted-foreground">
-                              {test.steps?.length || 0} step{(test.steps?.length || 0) !== 1 ? 's' : ''}
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{test.steps_count} step{test.steps_count !== 1 ? 's' : ''}</span>
+                              <span className="font-mono text-xs">{test.xray_path}</span>
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resumen por categoría */}
+                  {result.tests && result.tests.length > 0 && (
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h5 className="font-medium text-sm mb-2 text-blue-800">Resumen por Categoría:</h5>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="text-center">
+                          <div className="font-semibold text-red-600">Críticos</div>
+                          <div className="text-muted-foreground">
+                            {result.tests.filter(t => t.category === 'criticos').length}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-yellow-600">Importantes</div>
+                          <div className="text-muted-foreground">
+                            {result.tests.filter(t => t.category === 'importantes').length}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="font-semibold text-green-600">Opcionales</div>
+                          <div className="text-muted-foreground">
+                            {result.tests.filter(t => t.category === 'opcionales').length}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

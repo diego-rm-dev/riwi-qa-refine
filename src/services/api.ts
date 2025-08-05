@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { PendingHU, RefineHURequest, RefineHUResponse } from '@/types';
+import { PendingHU, RefineHURequest, RefineHUResponse, LoginRequest, RegisterRequest, AuthResponse, User, ProjectCreate, Project, ProjectListResponse } from '@/types';
 
-// ✅ CORRECTO: Variables de entorno sin dotenv
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-qa-blackbird.diegormdev.site';
+// ✅ CORREGIDO: Variables de entorno sin dotenv
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3500';
 const API_KEY = import.meta.env.VITE_API_KEY;
 
 console.log('🔧 API Configuration:');
@@ -17,14 +17,32 @@ export const apiClient = axios.create({
   },
 });
 
+// Función para obtener token JWT del localStorage
+const getStoredToken = (): string | null => {
+  return localStorage.getItem('token');
+};
+
+// Función para guardar token en localStorage
+const setStoredToken = (token: string): void => {
+  localStorage.setItem('token', token);
+};
+
+// Función para eliminar token del localStorage
+const removeStoredToken = (): void => {
+  localStorage.removeItem('token');
+};
+
 // Add interceptor to include Bearer token in every request
 apiClient.interceptors.request.use(
-  (config) => {
-    if (API_KEY) {
-      config.headers['Authorization'] = `Bearer ${API_KEY}`;
-      console.log('🔐 Authorization header added to request');
-    } else {
-      console.warn('⚠️ API_KEY not found in .env file');
+  async (config) => {
+    try {
+      const token = getStoredToken();
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+        console.log('🔐 Authorization header added to request');
+      }
+    } catch (error) {
+      console.error('❌ Error obteniendo token:', error);
     }
     return config;
   },
@@ -41,399 +59,571 @@ apiClient.interceptors.response.use(
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
-      data: error.response?.data
+      data: error.response?.data,
+      message: error.message
     });
+    
+    // Manejar errores de autenticación
+    if (error.response?.status === 401) {
+      console.error('🔐 Unauthorized - removing token');
+      removeStoredToken();
+      // Redirigir al login si es necesario
+      window.location.href = '/login';
+    }
+    
+    // Manejar errores de CORS específicamente
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.error('🌐 CORS/Network Error detected');
+      return Promise.reject(new Error('Error de conexión: Verifica que el servidor esté disponible y la configuración de CORS sea correcta'));
+    }
+    
     return Promise.reject(error);
   }
 );
 
-// ✅ CORREGIDO: Crear/Refinar HU desde Azure ID
-export const refineHU = async (azureId: string): Promise<RefineHUResponse> => {
+// ==================== SERVICIOS DE AUTENTICACIÓN ====================
+
+export const loginUser = async (credentials: LoginRequest): Promise<AuthResponse> => {
   try {
-    console.log('🤖 Refining HU with Azure ID:', azureId);
+    console.log('🔐 Iniciando sesión...');
+    
+    const formData = new URLSearchParams();
+    formData.append('username', credentials.username);
+    formData.append('password', credentials.password);
+    
+    const response = await axios.post(`${API_BASE_URL}/auth/token`, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+    
+    const authResponse: AuthResponse = response.data;
+    setStoredToken(authResponse.access_token);
+    
+    console.log('✅ Login exitoso');
+    return authResponse;
+  } catch (error: any) {
+    console.error('❌ Error en login:', error);
+    throw new Error(error.response?.data?.detail || 'Error al iniciar sesión');
+  }
+};
+
+export const registerUser = async (userData: RegisterRequest): Promise<User> => {
+  try {
+    console.log('📝 Registrando usuario...');
+    
+    const response = await apiClient.post('/auth/register', userData);
+    
+    console.log('✅ Registro exitoso');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error en registro:', error);
+    throw new Error(error.response?.data?.detail || 'Error al registrar usuario');
+  }
+};
+
+export const getCurrentUser = async (): Promise<User> => {
+  try {
+    console.log('👤 Obteniendo información del usuario...');
+    
+    const response = await apiClient.get('/auth/me');
+    
+    console.log('✅ Información del usuario obtenida');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo usuario:', error);
+    throw new Error(error.response?.data?.detail || 'Error al obtener información del usuario');
+  }
+};
+
+export const logoutUser = (): void => {
+  console.log('🚪 Cerrando sesión...');
+  removeStoredToken();
+  console.log('✅ Sesión cerrada');
+};
+
+// ==================== SERVICIOS DE GESTIÓN DE PROYECTOS ====================
+
+export const createNewProject = async (projectData: ProjectCreate): Promise<Project> => {
+  try {
+    console.log('🏗️ Creando proyecto...');
+    
+    const response = await apiClient.post('/projects', projectData);
+    
+    console.log('✅ Proyecto creado exitosamente');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error creando proyecto:', error);
+    throw new Error(error.response?.data?.detail || 'Error al crear proyecto');
+  }
+};
+
+export const getUserProjects = async (): Promise<ProjectListResponse> => {
+  try {
+    console.log('📋 Obteniendo proyectos del usuario...');
+    
+    const response = await apiClient.get('/projects');
+    
+    console.log('✅ Proyectos obtenidos exitosamente');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo proyectos:', error);
+    throw new Error(error.response?.data?.detail || 'Error al obtener proyectos');
+  }
+};
+
+export const setActiveProject = async (projectId: string): Promise<Project> => {
+  try {
+    console.log(`🔄 Estableciendo proyecto ${projectId} como activo...`);
+    
+    const response = await apiClient.post(`/projects/${projectId}/activate`);
+    
+    console.log('✅ Proyecto activado exitosamente');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error activando proyecto:', error);
+    throw new Error(error.response?.data?.detail || 'Error al activar proyecto');
+  }
+};
+
+export const getActiveProject = async (): Promise<Project | null> => {
+  try {
+    console.log('🔍 Obteniendo proyecto activo...');
+    
+    const response = await apiClient.get('/projects/active');
+    
+    console.log('✅ Proyecto activo obtenido');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo proyecto activo:', error);
+    // Si no hay proyecto activo, retornar null
+    if (error.response?.status === 404) {
+      return null;
+    }
+    throw new Error(error.response?.data?.detail || 'Error al obtener proyecto activo');
+  }
+};
+
+export const updateProject = async (projectId: string, projectData: Partial<ProjectCreate>): Promise<Project> => {
+  try {
+    console.log('✏️ Actualizando proyecto...');
+    
+    const response = await apiClient.put(`/projects/${projectId}`, projectData);
+    
+    console.log('✅ Proyecto actualizado exitosamente');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error actualizando proyecto:', error);
+    throw new Error(error.response?.data?.detail || 'Error al actualizar proyecto');
+  }
+};
+
+export const deleteProject = async (projectId: string): Promise<{ message: string }> => {
+  try {
+    console.log('🗑️ Eliminando proyecto...');
+    
+    const response = await apiClient.delete(`/projects/${projectId}`);
+    
+    console.log('✅ Proyecto eliminado');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error eliminando proyecto:', error);
+    throw new Error(error.response?.data?.detail || 'Error al eliminar proyecto');
+  }
+};
+
+export const getProjectHUs = async (projectId: string): Promise<{ project: any; hus: any[]; total_count: number }> => {
+  try {
+    console.log('🔍 Obteniendo HUs del proyecto...');
+    
+    const response = await apiClient.get(`/projects/${projectId}/hus`);
+    
+    console.log('✅ HUs del proyecto obtenidas');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error obteniendo HUs del proyecto:', error);
+    throw new Error(error.response?.data?.detail || 'Error al obtener HUs del proyecto');
+  }
+};
+
+export const deleteHU = async (huId: string): Promise<{ message: string }> => {
+  try {
+    console.log('🗑️ Eliminando HU...');
+    
+    const response = await apiClient.delete(`/hus/${huId}`);
+    
+    console.log('✅ HU eliminada');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error eliminando HU:', error);
+    throw new Error(error.response?.data?.detail || 'Error al eliminar HU');
+  }
+};
+
+export const validatePassword = async (password: string): Promise<{ message: string; valid: boolean }> => {
+  try {
+    console.log('🔐 Validando contraseña...');
+    
+    const response = await apiClient.post('/auth/validate-password', { password });
+    
+    console.log('✅ Contraseña válida');
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error validando contraseña:', error);
+    
+    // Manejar específicamente el error de contraseña incorrecta
+    if (error.response?.status === 422) {
+      throw new Error('Contraseña incorrecta');
+    }
+    
+    // Para otros errores (401, 500, etc.), mantener el comportamiento original
+    throw new Error(error.response?.data?.detail || 'Error al validar contraseña');
+  }
+};
+
+// ==================== SERVICIOS EXISTENTES (ACTUALIZADOS) ====================
+
+// ✅ CORREGIDO: Crear/Refinar HU desde Azure ID
+export const refineHU = async (azureId: string, language: 'es' | 'en' = 'es'): Promise<RefineHUResponse> => {
+  try {
+    console.log('🤖 Refining HU with Azure ID:', azureId, 'Language:', language);
     
     const response = await apiClient.post('/hus', { 
-      azure_id: azureId
+      azure_id: azureId,
+      language: language
     });
     
     // ✅ Mapear respuesta del backend al formato PendingHU
-    const backendHU = response.data;
-    console.log('✅ HU refined successfully:', backendHU);
-    
+    const huData = response.data;
     const pendingHU: PendingHU = {
-      id: backendHU.id,
-      originalId: `HU-${backendHU.azure_id}`, // Formato HU-XXX
-      title: backendHU.name,
-      status: backendHU.status as 'pending' | 'accepted' | 'rejected',
-      createdAt: backendHU.created_at,
-      lastUpdated: backendHU.updated_at,
-      featureAssigned: backendHU.feature || "Sin Feature",
-      featureColor: getFeatureColor(backendHU.feature), // Función helper
-      moduleAssigned: backendHU.module || "Sin Módulo",
-      moduleColor: getModuleColor(backendHU.module), // Función helper
-      refinedContent: backendHU.refined_response || "🤖 Procesando...",
+      id: huData.id,
+      originalId: huData.azure_id,
+      title: huData.name,
+      status: huData.status,
+      createdAt: huData.created_at,
+      lastUpdated: huData.updated_at,
+      featureAssigned: huData.feature || 'Sin asignar',
+      featureColor: getFeatureColor(huData.feature),
+      moduleAssigned: huData.module || 'Sin asignar',
+      moduleColor: getModuleColor(huData.module),
+      refinedContent: huData.refined_response || 'Sin contenido refinado',
+      qaReviewer: undefined,
       reRefinementCount: 0
     };
     
+    console.log('✅ HU refined successfully');
     return {
       success: true,
-      message: "HU refinada exitosamente",
+      message: 'HU refinada exitosamente',
       data: pendingHU
     };
+    
   } catch (error: any) {
     console.error('❌ Error refining HU:', error);
     return {
       success: false,
-      message: error.response?.data?.detail || 'Failed to refine HU'
+      message: error.response?.data?.detail || 'Error al refinar HU',
+      data: undefined
     };
   }
 };
 
-// ✅ CORREGIDO: Obtener HUs pendientes
 export const getPendingHUs = async (): Promise<{ data: PendingHU[] }> => {
   try {
     console.log('📋 Fetching pending HUs...');
     
-    const response = await apiClient.get('/hus', {
-      params: { status: 'pending' }
-    });
+    const response = await apiClient.get('/hus?status=pending');
     
-    console.log(`✅ Found ${response.data.length} pending HUs`);
-    
-    // ✅ Mapear respuesta del backend al formato PendingHU
-    const pendingHUs: PendingHU[] = response.data.map((hu: any) => ({
+    const pendingHUs: PendingHU[] = response.data.data.map((hu: any) => ({
       id: hu.id,
-      originalId: `HU-${hu.azure_id}`, // Formato HU-XXX
+      originalId: hu.azure_id,
       title: hu.name,
-      status: hu.status as 'pending' | 'accepted' | 'rejected',
+      status: hu.status,
       createdAt: hu.created_at,
       lastUpdated: hu.updated_at,
-      featureAssigned: hu.feature || "Sin Feature",
+      featureAssigned: hu.feature || 'Sin asignar',
       featureColor: getFeatureColor(hu.feature),
-      moduleAssigned: hu.module || "Sin Módulo", 
+      moduleAssigned: hu.module || 'Sin asignar',
       moduleColor: getModuleColor(hu.module),
-      refinedContent: hu.refined_response || "🤖 Procesando...",
+      refinedContent: hu.refined_response || 'Sin contenido refinado',
+      qaReviewer: undefined,
       reRefinementCount: 0
     }));
     
+    console.log(`✅ ${pendingHUs.length} pending HUs fetched`);
     return { data: pendingHUs };
+    
   } catch (error: any) {
     console.error('❌ Error fetching pending HUs:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch pending HUs');
+    throw new Error(error.response?.data?.detail || 'Error al obtener HUs pendientes');
   }
 };
 
-// ✅ CORREGIDO: Aprobar HU
 export const approveHU = async (id: string, qaReviewer: string): Promise<void> => {
   try {
-    console.log(`✅ Approving HU ${id} by ${qaReviewer}`);
+    console.log(`✅ Approving HU: ${id}`);
     
-    // ✅ CORREGIDO: Usar endpoint correcto del backend
     await apiClient.patch(`/hus/${id}/status`, {
       status: 'accepted'
-      // Nota: qaReviewer no se usa actualmente en el backend
     });
     
-    console.log(`✅ HU ${id} aprobada por ${qaReviewer}`);
+    console.log('✅ HU approved successfully');
   } catch (error: any) {
     console.error('❌ Error approving HU:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to approve HU');
+    throw new Error(error.response?.data?.detail || 'Error al aprobar HU');
   }
 };
 
-// ✅ CORREGIDO: Rechazar HU (con re-refinamiento automático)
 export const rejectHU = async (id: string, feedback: string, qaReviewer: string): Promise<void> => {
   try {
-    console.log(`❌ Rejecting HU ${id} by ${qaReviewer} with feedback:`, feedback);
+    console.log(`❌ Rejecting HU: ${id}`);
     
-    // ✅ CORREGIDO: Usar endpoint correcto del backend
     await apiClient.patch(`/hus/${id}/status`, {
       status: 'rejected',
       feedback: feedback
-      // Nota: qaReviewer no se usa actualmente en el backend
     });
     
-    console.log(`❌ HU ${id} rechazada por ${qaReviewer}. Re-refinando automáticamente...`);
+    console.log('✅ HU rejected successfully');
   } catch (error: any) {
     console.error('❌ Error rejecting HU:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to reject HU');
+    throw new Error(error.response?.data?.detail || 'Error al rechazar HU');
   }
 };
 
-// ✅ CORREGIDO: Obtener historial de HUs
 export const getHUHistory = async (): Promise<{ data: PendingHU[] }> => {
   try {
     console.log('📚 Fetching HU history...');
     
-    // ✅ CORREGIDO: Usar los valores correctos de status
-    const [acceptedResponse, rejectedResponse] = await Promise.all([
-      apiClient.get('/hus', { params: { status: 'accepted' } }),
-      apiClient.get('/hus', { params: { status: 'rejected' } })
-    ]);
+    const response = await apiClient.get('/hus');
     
-    // Combinar ambas respuestas
-    const allHistoryHUs = [...acceptedResponse.data, ...rejectedResponse.data];
-    console.log(`✅ Found ${allHistoryHUs.length} HUs in history`);
-    
-    // ✅ Mapear al formato PendingHU
-    const historyHUs: PendingHU[] = allHistoryHUs.map((hu: any) => ({
+    const historyHUs: PendingHU[] = response.data.data.map((hu: any) => ({
       id: hu.id,
-      originalId: `HU-${hu.azure_id}`,
+      originalId: hu.azure_id,
       title: hu.name,
-      status: hu.status as 'pending' | 'accepted' | 'rejected',
+      status: hu.status,
       createdAt: hu.created_at,
       lastUpdated: hu.updated_at,
-      featureAssigned: hu.feature || "Sin Feature",
+      featureAssigned: hu.feature || 'Sin asignar',
       featureColor: getFeatureColor(hu.feature),
-      moduleAssigned: hu.module || "Sin Módulo",
+      moduleAssigned: hu.module || 'Sin asignar',
       moduleColor: getModuleColor(hu.module),
-      refinedContent: hu.refined_response || "Sin contenido refinado",
+      refinedContent: hu.refined_response || 'Sin contenido refinado',
+      qaReviewer: undefined,
       reRefinementCount: 0
     }));
     
-    // Ordenar por fecha de actualización (más recientes primero)
-    historyHUs.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
-    
+    console.log(`✅ ${historyHUs.length} HUs in history fetched`);
     return { data: historyHUs };
+    
   } catch (error: any) {
     console.error('❌ Error fetching HU history:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch HU history');
+    throw new Error(error.response?.data?.detail || 'Error al obtener historial de HUs');
   }
 };
 
-// ✅ NUEVA: Función para obtener HU específica
 export const getHUById = async (id: string): Promise<PendingHU> => {
   try {
-    console.log('🔍 Fetching HU by ID:', id);
+    console.log(`🔍 Fetching HU by ID: ${id}`);
     
     const response = await apiClient.get(`/hus/${id}`);
     const hu = response.data;
     
-    console.log('✅ HU fetched by ID:', hu);
-    
-    return {
+    const pendingHU: PendingHU = {
       id: hu.id,
-      originalId: `HU-${hu.azure_id}`,
+      originalId: hu.azure_id,
       title: hu.name,
-      status: hu.status as 'pending' | 'accepted' | 'rejected',
+      status: hu.status,
       createdAt: hu.created_at,
       lastUpdated: hu.updated_at,
-      featureAssigned: hu.feature || "Sin Feature",
+      featureAssigned: hu.feature || 'Sin asignar',
       featureColor: getFeatureColor(hu.feature),
-      moduleAssigned: hu.module || "Sin Módulo",
+      moduleAssigned: hu.module || 'Sin asignar',
       moduleColor: getModuleColor(hu.module),
-      refinedContent: hu.refined_response || "🤖 Procesando...",
+      refinedContent: hu.refined_response || 'Sin contenido refinado',
+      qaReviewer: undefined,
       reRefinementCount: 0
     };
+    
+    console.log('✅ HU fetched successfully');
+    return pendingHU;
+    
   } catch (error: any) {
     console.error('❌ Error fetching HU by ID:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch HU');
+    throw new Error(error.response?.data?.detail || 'Error al obtener HU');
   }
 };
 
-// ✅ NUEVA: Obtener todas las HUs (sin filtrar por status)
 export const getAllHUs = async (): Promise<{ data: PendingHU[] }> => {
   try {
     console.log('📋 Fetching all HUs...');
     
     const response = await apiClient.get('/hus');
     
-    console.log(`✅ Found ${response.data.length} total HUs`);
-    
-    const allHUs: PendingHU[] = response.data.map((hu: any) => ({
+    const allHUs: PendingHU[] = response.data.data.map((hu: any) => ({
       id: hu.id,
-      originalId: `HU-${hu.azure_id}`,
+      originalId: hu.azure_id,
       title: hu.name,
-      status: hu.status as 'pending' | 'accepted' | 'rejected',
+      status: hu.status,
       createdAt: hu.created_at,
       lastUpdated: hu.updated_at,
-      featureAssigned: hu.feature || "Sin Feature",
+      featureAssigned: hu.feature || 'Sin asignar',
       featureColor: getFeatureColor(hu.feature),
-      moduleAssigned: hu.module || "Sin Módulo",
+      moduleAssigned: hu.module || 'Sin asignar',
       moduleColor: getModuleColor(hu.module),
-      refinedContent: hu.refined_response || "🤖 Procesando...",
+      refinedContent: hu.refined_response || 'Sin contenido refinado',
+      qaReviewer: undefined,
       reRefinementCount: 0
     }));
     
+    console.log(`✅ ${allHUs.length} HUs fetched`);
     return { data: allHUs };
+    
   } catch (error: any) {
     console.error('❌ Error fetching all HUs:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch all HUs');
+    throw new Error(error.response?.data?.detail || 'Error al obtener todas las HUs');
   }
 };
 
-// ✅ NUEVA: Generar tests para una HU
 export const generateTests = async (azureId: string, xrayPath: string): Promise<any> => {
   try {
-    console.log(`🧪 Generating tests for HU ${azureId} at path: ${xrayPath}`);
+    console.log(`🧪 Generating tests for HU: ${azureId}`);
     
     const response = await apiClient.post('/generate-tests', {
       azure_id: azureId,
       xray_path: xrayPath
     });
     
-    console.log('✅ Tests generated successfully:', response.data);
+    console.log('✅ Tests generated successfully');
     return response.data;
+    
   } catch (error: any) {
     console.error('❌ Error generating tests:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to generate tests');
+    throw new Error(error.response?.data?.detail || 'Error al generar tests');
   }
 };
 
-// ✅ NUEVA: Debug endpoints
 export const debugListHUs = async (): Promise<any> => {
   try {
+    console.log('🔍 Debug: Listing all HUs...');
+    
     const response = await apiClient.get('/debug/hus');
+    
+    console.log('✅ Debug HUs listed successfully');
     return response.data;
+    
   } catch (error: any) {
     console.error('❌ Error in debug list HUs:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to debug HUs');
+    throw new Error(error.response?.data?.detail || 'Error en debug list HUs');
   }
 };
 
 export const debugFindHU = async (azureId: string): Promise<any> => {
   try {
+    console.log(`🔍 Debug: Finding HU: ${azureId}`);
+    
     const response = await apiClient.get(`/debug/hu/${azureId}`);
+    
+    console.log('✅ Debug HU found successfully');
     return response.data;
+    
   } catch (error: any) {
     console.error('❌ Error in debug find HU:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to debug find HU');
+    throw new Error(error.response?.data?.detail || 'Error en debug find HU');
   }
 };
 
-// ✅ FUNCIONES HELPER para colores
+// ==================== FUNCIONES AUXILIARES ====================
+
 const getFeatureColor = (feature: string | null): string => {
-  if (!feature) return '#6B7280'; // Gray por defecto
+  if (!feature) return '#6B7280';
   
-  // Mapeo de colores por feature
-  const featureColors: { [key: string]: string } = {
-    'Perfil de Usuario': '#3B82F6', // Blue
-    'Registro, login, validación y recuperar contraseña': '#10B981', // Green
-    'Gestión de perfil e historial del repartidor': '#F59E0B', // Yellow
-    'Gestión de Lotes y Productos': '#EF4444', // Red
-    'Catálogo de Productos e Interacción Visual': '#8B5CF6', // Purple
-    'Detalle de Productos y Agregado al Carrito': '#06B6D4', // Cyan
-    'Navegación por Categorías y Búsqueda Flotante': '#84CC16', // Lime
-    'Gestión de estados': '#F97316', // Orange
-    'Carrito y Checkout del Dropshipper': '#EC4899', // Pink
-    'Dashboard Principal': '#6366F1' // Indigo
-  };
+  const colors = [
+    '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6',
+    '#EC4899', '#F97316', '#84CC16', '#06B6D4', '#6366F1'
+  ];
   
-  return featureColors[feature] || '#6B7280';
+  const hash = feature.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  
+  return colors[Math.abs(hash) % colors.length];
 };
 
 const getModuleColor = (module: string | null): string => {
-  if (!module) return '#6B7280'; // Gray por defecto
+  if (!module) return '#6B7280';
   
-  // Mapeo de colores por módulo
-  const moduleColors: { [key: string]: string } = {
-    'Gestión de Información': '#3B82F6', // Blue
-    'Gestión de Productos': '#10B981', // Green
-    'Gestión de Pedidos': '#F59E0B', // Yellow
-    'Gestión de Métricas': '#EF4444' // Red
-  };
+  const colors = [
+    '#DC2626', '#EA580C', '#16A34A', '#2563EB', '#7C3AED',
+    '#DB2777', '#EA580C', '#65A30D', '#0891B2', '#4F46E5'
+  ];
   
-  return moduleColors[module] || '#6B7280';
+  const hash = module.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  
+  return colors[Math.abs(hash) % colors.length];
 };
 
-// ✅ FUNCIÓN DE UTILIDAD: Verificar configuración de API
 export const isApiConfigured = (): boolean => {
-  const hasApiKey = !!API_KEY;
-  const hasBaseUrl = !!API_BASE_URL;
-  
-  if (!hasApiKey) {
-    console.warn('⚠️ VITE_API_KEY not configured in .env file');
-  }
-  
-  if (!hasBaseUrl) {
-    console.warn('⚠️ VITE_API_BASE_URL not configured in .env file');
-  }
-  
-  return hasApiKey && hasBaseUrl;
+  return !!(API_BASE_URL && API_KEY);
 };
 
-// ✅ FUNCIÓN DE DEBUG: Verificar variables de entorno
 export const debugEnvVars = (): void => {
   console.log('🔧 Environment Variables Debug:');
   console.log('   VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
   console.log('   VITE_API_KEY:', import.meta.env.VITE_API_KEY ? '✅ Set' : '❌ Not set');
-  console.log('   Resolved API_BASE_URL:', API_BASE_URL);
-  console.log('   API_KEY configured:', !!API_KEY);
-  console.log('   Is API configured:', isApiConfigured());
+  console.log('   API_BASE_URL:', API_BASE_URL);
+  console.log('   API_KEY:', API_KEY ? '✅ Set' : '❌ Not set');
 };
 
-// ✅ PROYECTO MANAGEMENT FUNCTIONS (para el multi-proyecto)
+// ==================== FUNCIONES DEPRECADAS (MANTENER PARA COMPATIBILIDAD) ====================
 
-// Obtener todos los proyectos
 export const fetchProjects = async (): Promise<any[]> => {
+  console.warn('⚠️ fetchProjects is deprecated, use getUserProjects instead');
   try {
-    console.log('🔍 Fetching projects from API...');
-    
-    const response = await apiClient.get('/projects');
-    
-    console.log(`✅ Found ${response.data.length} projects`);
-    return response.data;
-  } catch (error: any) {
+    const response = await getUserProjects();
+    return response.projects;
+  } catch (error) {
     console.error('❌ Error fetching projects:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch projects');
+    return [];
   }
 };
 
-// Crear nuevo proyecto
 export const createProject = async (projectData: { name: string; key: string; description?: string }): Promise<any> => {
+  console.warn('⚠️ createProject is deprecated, use createNewProject with new interface instead');
   try {
-    console.log('🚀 Creating project:', projectData);
+    // Convertir formato antiguo al nuevo
+    const newProjectData: ProjectCreate = {
+      name: projectData.name,
+      description: projectData.description,
+      azure_devops_token: '', // Requerido en el nuevo formato
+      azure_org: '', // Requerido en el nuevo formato
+      azure_project: projectData.key,
+      client_id: '', // Requerido en el nuevo formato
+      client_secret: '' // Requerido en el nuevo formato
+    };
     
-    const response = await apiClient.post('/projects', projectData);
-    
-    console.log('✅ Project created successfully:', response.data);
-    return response.data;
-  } catch (error: any) {
+    return await createNewProject(newProjectData);
+  } catch (error) {
     console.error('❌ Error creating project:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to create project');
+    throw error;
   }
 };
 
-// Obtener proyecto por clave
 export const fetchProjectByKey = async (projectKey: string): Promise<any> => {
+  console.warn('⚠️ fetchProjectByKey is deprecated');
   try {
-    console.log('🔍 Fetching project by key:', projectKey);
-    
-    const response = await apiClient.get(`/projects/${projectKey}`);
-    
-    console.log('✅ Project fetched by key:', response.data);
-    return response.data;
-  } catch (error: any) {
+    const projects = await getUserProjects();
+    return projects.projects.find((p: any) => p.azure_project === projectKey);
+  } catch (error) {
     console.error('❌ Error fetching project by key:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to fetch project');
+    return null;
   }
 };
-
-// ✅ Interceptor para agregar X-Project-Key header automáticamente
-let currentProjectKey: string | null = null;
 
 export const setCurrentProjectKey = (projectKey: string | null): void => {
-  currentProjectKey = projectKey;
-  console.log('🔑 Current project key set to:', projectKey);
+  console.warn('⚠️ setCurrentProjectKey is deprecated, use setActiveProject instead');
+  // Esta función ya no es necesaria con el nuevo sistema
 };
-
-// Interceptor que agrega el Project-Key header a todas las peticiones
-apiClient.interceptors.request.use(
-  (config) => {
-    // Agregar Authorization header
-    if (API_KEY) {
-      config.headers['Authorization'] = `Bearer ${API_KEY}`;
-    }
-    
-    // Agregar Project-Key header si hay proyecto seleccionado
-    if (currentProjectKey) {
-      config.headers['Project-Key'] = currentProjectKey;
-      console.log('🗝️ Project-Key header added:', currentProjectKey);
-    }
-    
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);

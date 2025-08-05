@@ -1,391 +1,296 @@
-import { useEffect, useState } from 'react';
-import { Search, Filter, X, ChevronRight, Calendar, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useHUs } from '@/hooks/useHUs';
-import { useFilters } from '@/hooks/useFilters';
-import StatusBadge from '@/components/ui/StatusBadge';
-import ModuleBadge from '@/components/ui/ModuleBadge';
-import FeatureBadge from '@/components/ui/FeatureBadge';
-import ActionButtons from '@/components/ui/ActionButtons';
-import RejectModal from '@/components/ui/RejectModal';
-import Navbar from '@/components/layout/Navbar';
-import { mockModules, mockFeatures } from '@/data/mockData';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getPendingHUs, approveHU, rejectHU } from '@/services/api';
+import { useAppContext } from '@/context/AppContext';
 import { PendingHU } from '@/types';
+import RejectModal from '@/components/ui/RejectModal';
+import FeatureBadge from '@/components/ui/FeatureBadge';
+import ModuleBadge from '@/components/ui/ModuleBadge';
+import StatusBadge from '@/components/ui/StatusBadge';
 import ReactMarkdown from 'react-markdown';
 
 const Pending = () => {
-  const { currentHU, loading, loadPendingHUs, setCurrentHU, approveHUById, rejectHUById } = useHUs();
-  const { filters, filteredHUs, updateFilter, clearFilters, hasActiveFilters, filterCounts } = useFilters();
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const { appState, appDispatch, projectState } = useAppContext();
+  const [selectedHU, setSelectedHU] = useState<PendingHU | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadPendingHUs();
-  }, [loadPendingHUs]);
+  }, []);
 
-  // Set first HU as current if none selected
-  useEffect(() => {
-    if (!currentHU && filteredHUs.length > 0) {
-      setCurrentHU(filteredHUs[0]);
+  const loadPendingHUs = async () => {
+    try {
+      appDispatch({ type: 'SET_LOADING', payload: true });
+      const response = await getPendingHUs();
+      appDispatch({ type: 'SET_PENDING_HUS', payload: response.data });
+    } catch (error: any) {
+      console.error('❌ Error loading pending HUs:', error);
+      setError(error.message || 'Error al cargar HUs pendientes');
     }
-  }, [currentHU, filteredHUs, setCurrentHU]);
+  };
 
   const handleSelectHU = (hu: PendingHU) => {
-    setCurrentHU(hu);
+    setSelectedHU(hu);
+    appDispatch({ type: 'SET_CURRENT_HU', payload: hu });
   };
 
   const handleApprove = async () => {
-    if (!currentHU) return;
-    
-    setActionLoading(true);
+    if (!selectedHU) return;
+
+    setLoading(true);
     try {
-      await approveHUById(currentHU.id, 'QA Reviewer');
+      await approveHU(selectedHU.id, 'QA Reviewer');
+      appDispatch({
+        type: 'APPROVE_HU',
+        payload: { id: selectedHU.id, qaReviewer: 'QA Reviewer' }
+      });
+      setSelectedHU(null);
+      appDispatch({ type: 'SET_CURRENT_HU', payload: null });
+    } catch (error: any) {
+      console.error('❌ Error approving HU:', error);
+      setError(error.message || 'Error al aprobar HU');
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
 
   const handleReject = () => {
-    setIsRejectModalOpen(true);
+    setShowRejectModal(true);
   };
 
   const handleConfirmReject = async (feedback: string) => {
-    if (!currentHU) return;
-    
-    setActionLoading(true);
+    if (!selectedHU) return;
+
+    setLoading(true);
     try {
-      await rejectHUById(currentHU.id, feedback, 'QA Reviewer');
-      setIsRejectModalOpen(false);
+      await rejectHU(selectedHU.id, feedback, 'QA Reviewer');
+      appDispatch({
+        type: 'REJECT_HU',
+        payload: { id: selectedHU.id, feedback, qaReviewer: 'QA Reviewer' }
+      });
+      setSelectedHU(null);
+      appDispatch({ type: 'SET_CURRENT_HU', payload: null });
+      setShowRejectModal(false);
+    } catch (error: any) {
+      console.error('❌ Error rejecting HU:', error);
+      setError(error.message || 'Error al rechazar HU');
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
       year: 'numeric',
+      month: 'short',
+      day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
+  const getStatusStats = () => {
+    const total = appState.pendingHUs.length;
+    const pending = appState.pendingHUs.filter(hu => hu.status === 'pending').length;
+    const accepted = appState.pendingHUs.filter(hu => hu.status === 'accepted').length;
+    const rejected = appState.pendingHUs.filter(hu => hu.status === 'rejected').length;
+
+    return { total, pending, accepted, rejected };
+  };
+
+  const stats = getStatusStats();
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-      
-      <div className="flex w-full">
-        {/* Sidebar */}
-        <div className="w-80 bg-card border-r border-border p-6 h-[calc(100vh-4rem)] overflow-y-auto">
-          {/* Search and Filters */}
-          <div className="space-y-4 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Buscar HUs..."
-                value={filters.search}
-                onChange={(e) => updateFilter({ search: e.target.value })}
-                className="pl-10"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3">
-              <Select value={filters.status} onValueChange={(value) => updateFilter({ status: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="accepted">Aceptado</SelectItem>
-                  <SelectItem value="rejected">Rechazado</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.module} onValueChange={(value) => updateFilter({ module: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Módulo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los módulos</SelectItem>
-                  {mockModules.map((module) => (
-                    <SelectItem key={module.id} value={module.name}>
-                      {module.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.feature} onValueChange={(value) => updateFilter({ feature: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Feature" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las features</SelectItem>
-                  {mockFeatures.map((feature) => (
-                    <SelectItem key={feature.id} value={feature.name}>
-                      {feature.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters} className="w-full">
-                <X className="w-4 h-4" />
-                Limpiar filtros
-              </Button>
-            )}
-          </div>
-
-          {/* Filter Stats */}
-          <div className="mb-6 p-3 bg-muted/50 rounded-lg">
-            <div className="text-xs text-muted-foreground mb-2">Resultados</div>
-            <div className="text-sm font-medium">
-              {filterCounts.filtered} de {filterCounts.total} HUs
-            </div>
-            <div className="flex gap-2 mt-2 text-xs">
-              <span className="px-2 py-1 bg-warning/10 text-warning rounded">
-                {filterCounts.pending} pendientes
-              </span>
-              <span className="px-2 py-1 bg-success/10 text-success rounded">
-                {filterCounts.accepted} aceptadas
-              </span>
-            </div>
-          </div>
-
-          {/* HU List */}
-          <div className="space-y-3">
-            {loading && filteredHUs.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-sm text-muted-foreground">Cargando HUs...</p>
-              </div>
-            ) : filteredHUs.length === 0 ? (
-              <div className="text-center py-8">
-                <Filter className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground">No hay HUs que coincidan con los filtros</p>
-              </div>
-            ) : (
-              filteredHUs.map((hu) => (
-                <Card
-                  key={hu.id}
-                  className={`cursor-pointer transition-all duration-200 ${
-                    currentHU?.id === hu.id
-                      ? 'ring-2 ring-primary shadow-elegant'
-                      : 'hover:shadow-md hover:border-primary/20'
-                  }`}
-                  onClick={() => handleSelectHU(hu)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-mono text-muted-foreground">
-                            {hu.originalId}
-                          </span>
-                          <StatusBadge status={hu.status} />
-                        </div>
-                        <h3 className="font-medium text-sm leading-tight mb-2">
-                          {hu.title}
-                        </h3>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
-                    </div>
-
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      <ModuleBadge name={hu.moduleAssigned} color={hu.moduleColor} />
-                      <FeatureBadge name={hu.featureAssigned} color={hu.featureColor} />
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(hu.lastUpdated)}
-                      </div>
-                      {hu.reRefinementCount && hu.reRefinementCount > 0 && (
-                        <span className="px-2 py-1 bg-warning/10 text-warning rounded-full">
-                          Re-refinado {hu.reRefinementCount}x
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1 p-8 h-[calc(100vh-4rem)] overflow-y-auto">
-          {currentHU ? (
-            <div className="max-w-4xl mx-auto">
-              {/* Header */}
-              <div className="mb-8">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h1 className="text-3xl font-bold text-foreground mb-2">
-                      {currentHU.title}
-                    </h1>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-mono text-muted-foreground">
-                        {currentHU.originalId}
-                      </span>
-                      <StatusBadge status={currentHU.status} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 mb-6">
-                  <ModuleBadge name={currentHU.moduleAssigned} color={currentHU.moduleColor} />
-                  <FeatureBadge name={currentHU.featureAssigned} color={currentHU.featureColor} />
-                </div>
-
-                <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    <span>Actualizado: {formatDate(currentHU.lastUpdated)}</span>
-                  </div>
-                  {currentHU.qaReviewer && (
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      <span>Reviewer: {currentHU.qaReviewer}</span>
-                    </div>
-                  )}
-                  {currentHU.reRefinementCount && currentHU.reRefinementCount > 0 && (
-                    <span className="px-3 py-1 bg-warning/10 text-warning rounded-full">
-                      Re-refinado {currentHU.reRefinementCount} veces
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Content */}
-              <Card className="mb-8">
-    <CardContent className="p-8">
-      <div className="space-y-6">
+      <div className="container mx-auto px-6 py-8">
         {/* Header */}
-        <div>
-          <h3 className="text-xl font-semibold text-foreground mb-2">
-            Análisis de Historia de Usuario
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Refinamiento automático con evaluación de criticidad y criterios de aceptación
-          </p>
-        </div>
-        
-        {/* Content Display */}
-        {currentHU.refinedContent ? (
-          <>
-            {/* ✅ Loading state */}
-            {(currentHU.refinedContent.includes('🤖 Refinando') || 
-              currentHU.refinedContent.includes('🤖 Procesando')) ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-primary font-medium">Refinando con IA...</p>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    Analizando criticidad y generando criterios de aceptación
-                  </p>
-                </div>
-              </div>
-            ) : 
-            
-            /* ✅ Error state */
-            currentHU.refinedContent.includes('❌ Error') ? (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center">
-                    <span className="text-white text-xs">!</span>
-                  </div>
-                  <h4 className="font-medium text-destructive">Error en el refinamiento</h4>
-                </div>
-                <pre className="text-sm text-destructive/80 whitespace-pre-wrap">
-                  {currentHU.refinedContent}
-                </pre>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="mt-4"
-                  onClick={() => {
-                    // Función para reintentar el refinamiento
-                    console.log('Reintentar refinamiento');
-                  }}
-                >
-                  Reintentar Refinamiento
-                </Button>
-              </div>
-            ) : 
-            
-            /* ✅ Success state - Content display */
-            (
-              <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-6">
-                    <ReactMarkdown
-                      components={{
-                        h1: ({ children }) => <h1 className="text-2xl font-bold mb-4 text-foreground">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-xl font-semibold mb-3 text-foreground mt-6">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-lg font-medium mb-2 text-foreground mt-4">{children}</h3>,
-                        p: ({ children }) => <p className="mb-4 text-foreground leading-relaxed">{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc pl-6 mb-4 space-y-1">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal pl-6 mb-4 space-y-1">{children}</ol>,
-                        li: ({ children }) => <li className="text-foreground">{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                        em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
-                        code: ({ children }) => <code className="bg-muted px-2 py-1 rounded text-sm font-mono">{children}</code>,
-                        hr: () => <hr className="my-6 border-border" />,
-                      }}
-                    >
-                      {currentHU.refinedContent}
-                  </ReactMarkdown>
-              </div>
-            )}
-          </>
-        ) : (
-          /* ✅ No content state */
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No hay contenido refinado disponible</p>
-          </div>
-        )}
-      </div>
-    </CardContent>
-</Card>
-
-              {/* Action Buttons - Only show for pending HUs */}
-              {currentHU.status === 'pending' && (
-                <ActionButtons
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  loading={actionLoading}
-                />
-              )}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Filter className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                <h2 className="text-xl font-semibold mb-2">Selecciona una HU</h2>
-                <p className="text-muted-foreground">
-                  Elige una Historia de Usuario de la lista lateral para ver su contenido
-                </p>
+            <h1 className="text-3xl font-bold text-foreground">HUs Pendientes</h1>
+          </div>
+          
+          {/* Indicador de proyecto activo */}
+          {projectState.activeProject && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                  Proyecto Activo
+                </Badge>
+                <span className="text-sm font-medium text-blue-900">
+                  {projectState.activeProject.name}
+                </span>
+                <span className="text-xs text-blue-600">
+                  ({projectState.activeProject.azure_org}/{projectState.activeProject.azure_project})
+                </span>
               </div>
             </div>
           )}
+          
+          <p className="text-muted-foreground">
+            Revisa y aprueba las Historias de Usuario que han sido refinadas por IA.
+          </p>
         </div>
+
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+            <div className="text-sm text-gray-600">Total HUs</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+            <div className="text-sm text-gray-600">Pendientes</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
+            <div className="text-sm text-gray-600">Aprobadas</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+            <div className="text-sm text-gray-600">Rechazadas</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Reject Modal */}
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {appState.loading ? (
+        <div className="text-center py-8">
+          <p className="text-gray-600">Cargando HUs pendientes...</p>
+        </div>
+      ) : appState.pendingHUs.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-8">
+            <p className="text-gray-600">No hay HUs pendientes</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Lista de HUs */}
+          <div className="space-y-4 lg:col-span-1">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de HUs</h2>
+            <div className="space-y-3">
+              {appState.pendingHUs.map((hu) => (
+                <Card
+                  key={hu.id}
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    selectedHU?.id === hu.id ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                  onClick={() => handleSelectHU(hu)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg">{hu.title}</CardTitle>
+                        <CardDescription className="mt-1">
+                          {hu.originalId} • {formatDate(hu.createdAt)}
+                        </CardDescription>
+                      </div>
+                      <StatusBadge status={hu.status} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="flex gap-2 mb-3">
+                      <FeatureBadge name={hu.featureAssigned} color={hu.featureColor} />
+                      <ModuleBadge name={hu.moduleAssigned} color={hu.moduleColor} />
+                    </div>
+                    <p className="text-sm text-gray-600 line-clamp-2">
+                      {hu.refinedContent}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Detalle de HU seleccionada */}
+          {selectedHU && (
+            <div className="space-y-4 lg:col-span-2">
+              <h2 className="text-xl font-semibold text-gray-900">Detalle de HU</h2>
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-xl">{selectedHU.title}</CardTitle>
+                      <CardDescription className="mt-1">
+                        {selectedHU.originalId} • {formatDate(selectedHU.createdAt)}
+                      </CardDescription>
+                    </div>
+                    <StatusBadge status={selectedHU.status} />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <FeatureBadge name={selectedHU.featureAssigned} color={selectedHU.featureColor} />
+                    <ModuleBadge name={selectedHU.moduleAssigned} color={selectedHU.moduleColor} />
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Contenido Refinado</h3>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown>
+                          {selectedHU.refinedContent}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedHU.status === 'pending' && (
+                    <div className="flex gap-3">
+                      <Button
+                        onClick={handleApprove}
+                        disabled={loading}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {loading ? 'Aprobando...' : 'Aprobar'}
+                      </Button>
+                      <Button
+                        onClick={handleReject}
+                        disabled={loading}
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                      >
+                        {loading ? 'Rechazando...' : 'Rechazar'}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
+
       <RejectModal
-        isOpen={isRejectModalOpen}
-        onClose={() => setIsRejectModalOpen(false)}
+        isOpen={showRejectModal}
+        onClose={() => setShowRejectModal(false)}
         onConfirm={handleConfirmReject}
-        loading={actionLoading}
-        huTitle={currentHU?.title || ''}
+        loading={loading}
+        huTitle={selectedHU?.title || ''}
       />
+      </div>
     </div>
   );
 };
